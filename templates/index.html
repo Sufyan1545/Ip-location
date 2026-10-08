@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IP & Location</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0d1117;color:#fff;font-family:Arial,sans-serif}
+.card{width:min(430px,92%);background:#161b22;padding:24px;border-radius:18px;box-shadow:0 10px 35px #0008}
+h2{text-align:center;margin:0 0 18px}
+input,button{width:100%;padding:14px;margin-top:12px;border-radius:10px;font-size:15px}
+input{background:#0d1117;color:#fff;border:1px solid #30363d}
+button{border:0;color:#fff;font-weight:bold;cursor:pointer}
+.exact{background:#238636}.approx{background:#1f6feb}
+.notice{font-size:13px;line-height:1.7;color:#bbb;background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;margin-top:12px}
+.consent{display:flex;gap:9px;align-items:flex-start;margin-top:12px;color:#ddd;font-size:13px;line-height:1.6}
+.consent input{width:auto;margin:3px 0 0}
+#status{text-align:center;margin-top:14px;color:#aaa;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="card">
+<h2>إرسال بيانات الاتصال</h2>
+
+<input id="chat_id" placeholder="Chat ID">
+<input id="token" type="password" placeholder="Bot Token">
+
+<div class="notice">
+سيتم إرسال عنوان IP إلى البوت الذي أدخلت بياناته.
+زر الموقع الدقيق يطلب إذن المتصفح ويرسل الإحداثيات فقط بعد موافقتك.
+زر الموقع التقريبي يستخدم عنوان IP لتقدير المدينة أو المنطقة ولا يطلب إذن GPS.
+</div>
+
+<label class="consent">
+<input id="consent" type="checkbox">
+<span>أوافق على إرسال عنوان IP، وأفهم أن الموقع الدقيق سيُرسل فقط إذا وافقت على إذن الموقع عند الضغط على الزر المخصص له.</span>
+</label>
+
+<button class="exact" id="exact">إرسال IP + الموقع الدقيق</button>
+<button class="approx" id="approx">إرسال IP + الموقع التقريبي</button>
+
+<div id="status"></div>
+</div>
+
+<script>
+const statusBox = document.getElementById("status");
+
+function values(){
+  const token = document.getElementById("token").value.trim();
+  const chat_id = document.getElementById("chat_id").value.trim();
+
+  if(!token || !chat_id){
+    statusBox.textContent = "أدخل Bot Token و Chat ID.";
+    return null;
+  }
+
+  if(!document.getElementById("consent").checked){
+    statusBox.textContent = "يجب الموافقة على مشاركة البيانات أولًا.";
+    return null;
+  }
+
+  return {token, chat_id};
+}
+
+async function send(mode, latitude=null, longitude=null){
+  const v = values();
+  if(!v) return;
+
+  statusBox.textContent = "جاري الإرسال...";
+
+  try{
+    const response = await fetch("/send", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        token:v.token,
+        chat_id:v.chat_id,
+        mode,
+        latitude,
+        longitude
+      })
+    });
+
+    const data = await response.json();
+    statusBox.textContent = data.message || "تم التنفيذ.";
+  }catch(e){
+    statusBox.textContent = "تعذر الاتصال بالخادم.";
+  }
+}
+
+document.getElementById("exact").onclick = () => {
+  if(!values()) return;
+
+  if(!navigator.geolocation){
+    statusBox.textContent = "المتصفح لا يدعم تحديد الموقع.";
+    return;
+  }
+
+  statusBox.textContent = "سيظهر الآن طلب إذن الموقع...";
+
+  navigator.geolocation.getCurrentPosition(
+    p => send("exact", p.coords.latitude, p.coords.longitude),
+    () => statusBox.textContent = "لم تتم الموافقة على الموقع الدقيق.",
+    {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+  );
+};
+
+document.getElementById("approx").onclick = () => send("approx");
+</script>
+</body>
+</html>
